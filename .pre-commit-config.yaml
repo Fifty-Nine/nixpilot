@@ -1,0 +1,102 @@
+# Pre-commit hooks for nixpilot
+#
+# Requires the pre-commit package (provided by the dev shell: nix develop).
+# Install:   make install-hooks
+# Run all:   nix develop . --command pre-commit -- run --all-files
+#
+# Tools invoked by local hooks (ruff, alejandra, deadnix, statix, nixf-diagnose,
+# flake-checker, nix) must be on PATH — provided by the dev shell.
+
+fail_fast: true
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff-format
+        description: Format Python with ruff
+        entry: ruff format
+        language: system
+        files: \.py$
+        pass_filenames: true
+
+      - id: ruff-check
+        name: ruff-check
+        description: Lint Python with ruff
+        entry: ruff check
+        language: system
+        files: \.py$
+        pass_filenames: true
+
+      - id: alejandra
+        name: alejandra
+        description: Format Nix code with alejandra
+        entry: alejandra
+        language: system
+        files: \.nix$
+        pass_filenames: true
+        require_serial: true
+
+      - id: deadnix
+        name: deadnix
+        description: Detect unused Nix bindings with deadnix
+        entry: deadnix --fail
+        language: system
+        files: \.nix$
+        pass_filenames: true
+
+      - id: statix
+        name: statix
+        description: Check for Nix anti-patterns with statix
+        entry: statix check --format errfmt
+        language: system
+        files: \.nix$
+        pass_filenames: false
+
+      - id: nixf-diagnose
+        name: nixf-diagnose
+        description: Lint Nix code with nixf-diagnose
+        entry: nixf-diagnose
+        language: system
+        files: \.nix$
+        pass_filenames: true
+
+      - id: flake-checker
+        name: flake-checker
+        description: Validate flake structure with flake-checker
+        entry: flake-checker -f
+        language: system
+        files: ^(flake\.nix|flake\.lock)$
+        pass_filenames: false
+
+      - id: nix-selftest
+        name: nix-selftest
+        description: Build the package and run the offline codec gate
+        language: system
+        entry: sh -c '! command -v nix || nix build .#checks.x86_64-linux.nixpilot-mcp-selftest --no-link'
+        files: \.(nix|py)$
+        pass_filenames: false
+
+      - id: agents-md-line-cap
+        name: agents-md-line-cap
+        description: Enforce the AGENTS.md hard line cap
+        entry: sh -c 'lines=$(wc -l < AGENTS.md); [ "$lines" -le 180 ] || { echo "AGENTS.md is $lines lines (cap 180). It documents agent-facing guidance only - trim it, or move content into code comments and commit messages." >&2; exit 1; }'
+        language: system
+        files: ^AGENTS\.md$
+        pass_filenames: false
+
+  - repo: https://github.com/Fifty-Nine/pi-review-precommit.git
+    rev: 32d07758bde0347c6fca5677f86a6b362fe097b0
+    hooks:
+      - id: pi-review
+        args: ["--pi-binary", "pi-jailed", "--model", "ollama-cloud/deepseek-v4-flash:0731", "--archive-sessions"]
+      - id: pi-review-notes

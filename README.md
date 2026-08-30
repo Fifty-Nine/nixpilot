@@ -75,7 +75,7 @@ sleep + re-assert previous state. **`sequence`** — ≤ 100 steps of
 `press` / `set_state` / `delay_ms`, ≤ 30 s total, pre-checked, one flock
 acquisition. **`reset`** — idle report. **`status`** — node writability, UDC
 binding, asserted state, watchdog deadline, lock holder. **`send_raw`** —
-`{ bytes: <16 hex> }`; byte 7 (const padding) must be `00`; decoded back into
+`{ hex: <16 hex> }`; byte 7 (const padding) must be `00`; decoded back into
 state so tracking stays authoritative (parity with the tinypilot workspace's
 `scripts/gamepad-smoke.sh` vectors).
 
