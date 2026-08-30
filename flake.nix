@@ -18,16 +18,20 @@
         pname = "nixpilot-mcp";
         module = "nixpilot.gamepad";
       };
+      nixpilot-screen-mcp = pkgs.callPackage ./package.nix {
+        pname = "nixpilot-screen-mcp";
+        module = "nixpilot.screen";
+      };
       default = nixpilot-mcp;
     });
 
-    # Offline codec gate: runs the pure report codec/vectors without any
-    # device dependency. The protocol smoke gates (scripts/mcp-smoke.sh,
-    # scripts/screen-smoke.sh) need the device and therefore run only
-    # on/against the host.
+    # Offline selftest gate: pure source checks (report codec and JPEG
+    # marker walk) without any device dependency. The protocol smoke gates
+    # (scripts/mcp-smoke.sh, scripts/screen-smoke.sh) need the device and
+    # therefore run only on/against the host.
     checks = forAllSystems (pkgs: {
       nixpilot-selftest = pkgs.callPackage ./checks.nix {
-        nixpilot-mcp = self.packages.${pkgs.system}.nixpilot-mcp;
+        inherit (self.packages.${pkgs.system}) nixpilot-mcp nixpilot-screen-mcp;
       };
     });
 
