@@ -5,10 +5,11 @@ Guidance for AI agents working in this repository.
 ## Project
 
 `nixpilot` — MCP servers for the NixOS-converted TinyPilot KVM, served by the
-tinypilot host. The flake packages `nixpilot-mcp` (Python, official `mcp`
-SDK); the aedificium-nixos homelab flake imports this repo and installs the
-package on the tinypilot host. The code is the spec; design contracts live in
-`README.md` and git commit messages, not here.
+tinypilot host. The flake packages the profile servers `nixpilot-mcp`
+(gamepad) and `nixpilot-screen-mcp` (screen, read-only) — Python, official
+`mcp` SDK; the aedificium-nixos homelab flake imports this repo and installs
+the packages on the tinypilot host. The code is the spec; design contracts
+live in `README.md` and git commit messages, not here.
 
 For device/profile context, the sibling migration workspace at
 `../tinypilot/` holds the authoritative docs (`tinypilot-docs/`) and the
