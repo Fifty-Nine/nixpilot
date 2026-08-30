@@ -22,16 +22,26 @@
         pname = "nixpilot-screen-mcp";
         module = "nixpilot.screen";
       };
+      nixpilot-keyboard-mcp = pkgs.callPackage ./package.nix {
+        pname = "nixpilot-keyboard-mcp";
+        module = "nixpilot.keyboard";
+      };
       default = nixpilot-mcp;
     });
 
-    # Offline selftest gate: pure source checks (report codec and JPEG
+    # Offline selftest gate: pure source checks (report codecs and JPEG
     # marker walk) without any device dependency. The protocol smoke gates
-    # (scripts/mcp-smoke.sh, scripts/screen-smoke.sh) need the device and
-    # therefore run only on/against the host.
+    # (scripts/mcp-smoke.sh, scripts/keyboard-smoke.sh,
+    # scripts/screen-smoke.sh) need the device and therefore run only
+    # on/against the host.
     checks = forAllSystems (pkgs: {
       nixpilot-selftest = pkgs.callPackage ./checks.nix {
-        inherit (self.packages.${pkgs.system}) nixpilot-mcp nixpilot-screen-mcp;
+        inherit
+          (self.packages.${pkgs.system})
+          nixpilot-mcp
+          nixpilot-keyboard-mcp
+          nixpilot-screen-mcp
+          ;
       };
     });
 

@@ -1,20 +1,25 @@
 # nixpilot
 
 MCP servers for the NixOS-converted TinyPilot KVM ("nixpilot"), **served by
-the tinypilot host**. Two profiles ship today: the M5 USB-OTG **gamepad**
-(input injection, binary `nixpilot-mcp`) and read-only **screen** observation
-(binary `nixpilot-screen-mcp`); further profiles join the same repo. Profile
+the tinypilot host**. Three profiles ship today: the M5 USB-OTG **gamepad**
+(input, `nixpilot-mcp`), the **keyboard** (input, `nixpilot-keyboard-mcp`),
+and read-only **screen** observation (`nixpilot-screen-mcp`). Profile
 device facts: `../tinypilot-docs/usb-gadget.md` + `m5-gate.md` (gadget),
 `video-pipeline.md` + `m3-gate.md` (capture).
 
 The tinypilot host config imports this repo as a flake input and installs
-both packages, putting both binaries in the device's `PATH`.
+all three packages, putting the three binaries in the device's `PATH`.
 
 ## Scope
 
 - **Gamepad profile (in scope):** the M5 device persona — 16 named buttons,
   two 8-bit analog sticks (left X/Y, right Z/Rz), an 8-way hat switch, 8-byte
   reports, write-only (no readback — `no_out_endpoint=1`).
+- **Keyboard profile (in scope):** the boot-protocol keyboard endpoint
+  (6-slot usage array, 8 modifiers, descriptor-legal usages through 0x91,
+  tracked set = 109 named keys, max 6 keys/sticky state), US QWERTY
+  `type_text`, and the host LED output report as the only readback channel
+  (`host_leds`).
 - **Screen profile (in scope):** read-only frame capture from the device's
   uStreamer instance (loopback HTTP): a single `screenshot` tool returning
   the latest JPEG frame plus metadata, and a `screen://state` resource.
@@ -23,7 +28,7 @@ both packages, putting both binaries in the device's `PATH`.
 - **Deferred (not precluded by design):** `ui_scan` — scan a captured frame
   for UI elements and report bounding boxes; coordinates will be normalized
   to `[0,1]` floats with frame dimensions attached (see the screen profile's
-  metadata contract). Also deferred: keyboard/mouse profiles, virtual media,
+  metadata contract). Also deferred: mouse profile, virtual media,
   frontend/backend integration, systemd/HTTP transport behind Caddy, audio.
 - **Milestone status:** tracked in this repo, not in `../tinypilot/milestones.md`.
   Host-side deployment beyond the package import (systemd service, HTTP
@@ -38,7 +43,7 @@ both packages, putting both binaries in the device's `PATH`.
 | Stack | Python + official `mcp` SDK, packaged via this flake (`python3.withPackages`) |
 | Gamepad safety | Auto-release on `press`, sticky-hold watchdog, idle write at start/exit, flock single-writer |
 | Screen safety | Read-only, stateless; validated JPEG (magic + EOI) so error pages can't masquerade as frames; bounded HTTP timeouts |
-| Packaging | Flake `packages.<system>.nixpilot-mcp` and `.nixpilot-screen-mcp`; PATH binaries in the host closure |
+| Packaging | Flake `packages.<system>.{nixpilot-mcp, nixpilot-keyboard-mcp, nixpilot-screen-mcp}`; PATH binaries in the host closure |
 | Host wire-up | aedificium `flake.lock` input + `environment.systemPackages` on the tinypilot host |
 
 ## Transport contract
@@ -56,13 +61,14 @@ and idle-start state.
   `tinypilot:~/nixpilot/` and launch
   `ssh … 'NIXPILOT_USTREAMER_URL=http://127.0.0.1:48001 nix run ~/nixpilot#nixpilot-screen-mcp'`
   — the package rebuilds on-device from the synced tree on each run.
-- **Gamepad sessions:** one session = one process = one flock holder;
-  simultaneous sessions are rejected with a clear error. **Screen sessions:**
-  no locks by design; any number of concurrent sessions may coexist with
-  gamepad sessions.
+- **Gamepad and keyboard sessions:** one session = one process = one
+  flock holder (independent lockfiles, so gamepad + keyboard sessions may
+  coexist); simultaneous sessions on the same profile are rejected with a
+  clear error. **Screen sessions:** no locks by design; any number of
+  concurrent sessions may coexist with input sessions.
 - Client config (pi-mcp-adapter and other stdio clients): `command: ssh`,
-  `args: [tinypilot, nixpilot-mcp]`, `toolPrefix: tinypilot`; likewise the
-  screen binary with its own prefix.
+  `args: [tinypilot, nixpilot-mcp]`, `toolPrefix: tinypilot`; likewise for
+  the other two binaries with their own prefixes.
 
 ## Profile: gamepad (`nixpilot-mcp`)
 
@@ -104,6 +110,54 @@ deadline).
 | Buttons | `A B X Y LB RB LT RT BACK START L3 R3 GUIDE BTN14 BTN15 BTN16` | `[0]` bits 0–7 = buttons 1–8, `[1]` bits 0–7 = 9–16 |
 | Sticks | float −1.0..1.0 | byte center `0x7F`; +1.0 → 255; −1.0 → 0 |
 | Hat | `N NE E SE S SW W NW NEUTRAL` | low nibble of `[6]`: 0..7, neutral `0xF` |
+
+## Profile: keyboard (`nixpilot-keyboard-mcp`)
+
+Server name `nixpilot-keyboard-mcp`; capabilities `tools` + `resources`.
+Lifecycle machinery matches the gamepad (flock single-writer on
+`/tmp/nixpilot-keyboard.lock`, 60 s sticky-state watchdog `NIXPILOT_WATCHDOG_TTL`,
+idle on start/exit); every write result carries the delivery caveat —
+keystrokes land in the target's currently focused window.
+
+Report contract: `[0]` modifier bitmap (LCTRL LSHIFT LALT LGUI RCTRL RSHIFT
+RALT RGUI), `[1]` reserved 0x00, `[2..7]` six usage slots (usage order is
+canonical; duplicates rejected). The tracked key table is 109 named keys
+covering letters, digits, F1–F24, control/navigation/arrow keys, and the
+keypad; `send_raw` validates against the descriptor's 0x91 logical maximum.
+
+**`set_state`** — partial merge, sticky:
+
+```jsonc
+{
+  "modifiers": ["LCTRL"],      // optional; [] clears; max 8
+  "keys": ["A", "TAB"]         // optional; [] clears; max 6
+}
+```
+
+**`press`** — `{keys, modifiers = [], hold_ms = 150 (0..10000)}`: atomic chord
+(keys required, modifiers optional)
+down + hold + re-assert. **`type_text`** — `{text, per_key_ms = 12}`: types
+US QWERTY text per character (down/hold/up, shift auto-composed), transient
+by contract (leaves the keyboard idle; no sticky remnants), pre-flight
+capped at 200 chars / 20 s. **`sequence`** — steps of press / set_state /
+type_text / delay_ms (≤ 100 steps, ≤ 30 s, one lock acquisition) for flows
+like Ctrl+T then a URL. **`reset`**, **`status`** (adds `host_leds`), and
+**`send_raw`** mirror the gamepad shapes; raw vectors are parity with the
+tinypilot workspace's `scripts/hidg-smoke.sh` (e.g. `04002b0000000000` =
+LAlt+Tab).
+
+`host_leds` — the keyboard is the only HID function the host writes to:
+`status` reads the node's single LED output byte nonblockingly (num_lock,
+caps_lock, scroll_lock, indicator, raw) — consuming it, so `host_leds` is
+`null` after each successful read until the host sends another output
+report (lock-state changes).
+
+Resources: `gadget://keyboard/layout` (usage map, text coverage, wire
+format, descriptor) and `gadget://keyboard/state` (asserted state + LED
+readback + watchdog + lock).
+
+Environment: `NIXPILOT_KEYBOARD_NODE` (default `/dev/hidg0`), shared
+`NIXPILOT_WATCHDOG_TTL`/`NIXPILOT_LOCKFILE`/`NIXPILOT_LOG_LEVEL`.
 
 ## Profile: screen (`nixpilot-screen-mcp`)
 
@@ -167,10 +221,12 @@ map to tool errors with cause; the target machine is never driven.
 flake.nix + flake.lock    packages: nixpilot-mcp, nixpilot-screen-mcp
 nixpilot/common/          shared runtime (logging, env parsing)
 nixpilot/gamepad/         gamepad profile (report codec, gadget, server, selftest)
+nixpilot/keyboard/        keyboard profile (keys codec, gadget, server, selftest)
 nixpilot/screen/          screen profile (capture, server, selftest)
 scripts/lib/mcp_session.py  shared JSON-RPC-over-stdio session transport
-scripts/mcp-smoke.sh      gamepad protocol gate (device required)
-scripts/screen-smoke.sh   screen protocol gate (live video required)
+scripts/mcp-smoke.sh        gamepad protocol gate (gamepad input lands on the target)
+scripts/keyboard-smoke.sh   keyboard protocol gate (default keys inert; typing opt-in)
+scripts/screen-smoke.sh     screen protocol gate (live video required)
 Makefile                  install-hooks / fmt / check entry points
 .pre-commit-config.yaml   aedificium-style rig (nix hooks + pi-review)
 ```
@@ -178,7 +234,10 @@ Makefile                  install-hooks / fmt / check entry points
 ## Increment plan
 
 1. **Gamepad (done):** flake + gate + aedificium wire-up + pi client smoke.
-2. **Screen (this increment):** the `screenshot` profile, offline selftest,
+2. **Screen (done):** the `screenshot` profile, offline selftest,
    aedificium package wire-up, `screen-smoke.sh` gate, client entry.
-3. **Deferred:** `ui_scan` (bbox contract above), keyboard/mouse profiles,
-   systemd/HTTP deployment, multi-writer arbitration.
+3. **Keyboard (this increment):** the typing/chord profile, offline
+   selftest, aedificium package wire-up, `keyboard-smoke.sh` gate, client
+   entry.
+4. **Deferred:** `ui_scan` (bbox contract), mouse profile, systemd/HTTP
+   deployment.
