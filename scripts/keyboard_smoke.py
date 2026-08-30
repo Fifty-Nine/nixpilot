@@ -98,16 +98,11 @@ def main() -> None:
         json.dumps(seq),
     )
 
-    raw = s.tool_json("send_raw", {"hex": "04002b0000000000"})
-    step(
-        "send_raw alt+tab vector",
-        raw.get("state", {}).get("modifiers") == ["LALT"]
-        and raw.get("state", {}).get("keys") == ["TAB"],
-        json.dumps(raw),
-    )
-    state = s.tool_json("reset").get("state", {})
-    step("post-raw idle", state.get("modifiers") == [], json.dumps(state))
-
+    # Typing runs BEFORE any raw-protocol report: the raw section below
+    # intentionally stays free of focus-affecting vectors (a literal alt+tab
+    # report switches the target's focused window and the compositor eats
+    # keystrokes during the transfer — observed first-hand; verify typed
+    # text visually when NIXPILOT_KB_GATE_TYPE=1).
     if GATE_TYPE:
         typed = s.tool_json("type_text", {"text": "nixpilot-gate", "per_key_ms": 12})
         step("type_text", typed.get("chars") == 13, json.dumps(typed))
@@ -167,6 +162,18 @@ def main() -> None:
         rc != 0 and any("single-writer" in line for line in two.err),
         f"rc={rc} stderr={two.err[-2:]}",
     )
+
+    # Raw-protocol parity: a modifier-only hold (LALT, no key) is inert —
+    # the alt+tab raw vector from the workspace's hidg-smoke.sh deliberately
+    # is NOT fired here: it switches the target's focused window.
+    raw = s.tool_json("send_raw", {"hex": "0400000000000000"})
+    step(
+        "send_raw modifier-only",
+        raw.get("state", {}).get("modifiers") == ["LALT"],
+        json.dumps(raw),
+    )
+    state = s.tool_json("reset").get("state", {})
+    step("post-raw idle", state.get("modifiers") == [], json.dumps(state))
 
     step("clean exit", s.close() == 0)
     print(
