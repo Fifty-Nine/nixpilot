@@ -11,7 +11,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from . import report
-from .gamepad import Gadget, GadgetError, PressRequest, SequenceStep
+from .gadget import Gadget, GadgetError, PressRequest, SequenceStep
 
 log = logging.getLogger("nixpilot.server")
 

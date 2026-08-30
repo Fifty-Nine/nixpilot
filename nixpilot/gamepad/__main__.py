@@ -1,4 +1,4 @@
-"""Entrypoint: python -m nixpilot_mcp (wrapped as the nixpilot-mcp binary).
+"""Entrypoint: python -m nixpilot.gamepad (wrapped as the nixpilot-mcp binary).
 
 Environment:
     NIXPILOT_GAMEPAD_NODE  HID node (default /dev/hidg3)
@@ -14,36 +14,21 @@ import atexit
 import logging
 import os
 import signal
-import sys
 
-from .gamepad import Gadget, GadgetError
+from ..common.runtime import env_number, setup_logging
+from .gadget import Gadget, GadgetError
 from .server import build_server
 
-log = logging.getLogger("nixpilot.main")
-
-
-def _env_number(name: str, default: float) -> float:
-    raw = os.environ.get(name)
-    if raw is None or raw == "":
-        return default
-    try:
-        return float(raw)
-    except ValueError:
-        log.error("%s must be a number, got %r", name, raw)
-        raise SystemExit(3) from None
+log = logging.getLogger("nixpilot.gamepad.main")
 
 
 def main() -> None:
-    logging.basicConfig(
-        stream=sys.stderr,
-        level=os.environ.get("NIXPILOT_LOG_LEVEL", "INFO").upper(),
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    setup_logging()
     try:
         gadget = Gadget(
             node=os.environ.get("NIXPILOT_GAMEPAD_NODE", "/dev/hidg3"),
             lockfile=os.environ.get("NIXPILOT_LOCKFILE", "/tmp/nixpilot-gamepad.lock"),
-            watchdog_ttl=_env_number("NIXPILOT_WATCHDOG_TTL", 60.0),
+            watchdog_ttl=env_number("NIXPILOT_WATCHDOG_TTL", 60.0),
         )
     except GadgetError as exc:
         log.error("%s", exc)

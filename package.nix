@@ -1,7 +1,7 @@
-# nixpilot-mcp package: the profile-based MCP server for the gadget's HID
-# endpoints, wrapped as a single PATH binary. The server module is plain
-# source copied to $out/share and resolved through PYTHONPATH, so the
-# aedificium tinypilot host gets the server plus a provisioned interpreter
+# nixpilot server package: one MCP profile executable per package instance,
+# wrapped as a single PATH binary. The nixpilot package tree is plain source
+# copied to $out/share and resolved through PYTHONPATH, so the aedificium
+# tinypilot host gets the servers plus a provisioned interpreter
 # (python3.withPackages) inside the system closure — no on-device eval, no
 # rsync, no GC eviction.
 {
@@ -9,15 +9,17 @@
   python3,
   runCommand,
   makeWrapper,
+  pname,
+  module,
 }: let
   version = "0.1.0";
   pyEnv = python3.withPackages (ps: [ps.mcp]);
 in
-  runCommand "nixpilot-mcp-${version}" {
+  runCommand "${pname}-${version}" {
     inherit version;
     meta = {
-      description = "MCP servers for the NixOS TinyPilot KVM HID gadgets";
-      mainProgram = "nixpilot-mcp";
+      description = "MCP server for the NixOS TinyPilot KVM (${module})";
+      mainProgram = pname;
       license = lib.licenses.mit;
       platforms = lib.platforms.linux;
     };
@@ -26,9 +28,9 @@ in
     passthru.nixpilotPython = pyEnv;
   } ''
     install -d $out/share
-    cp -r ${./nixpilot_mcp} $out/share/nixpilot_mcp
+    cp -r ${./nixpilot} $out/share/nixpilot
     mkdir -p $out/bin
-    makeWrapper ${pyEnv}/bin/python3 $out/bin/nixpilot-mcp \
+    makeWrapper ${pyEnv}/bin/python3 $out/bin/${pname} \
       --set PYTHONPATH $out/share \
-      --add-flags '-m nixpilot_mcp'
+      --add-flags '-m ${module}'
   ''

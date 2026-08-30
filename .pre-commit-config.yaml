@@ -82,7 +82,7 @@ repos:
         name: nix-selftest
         description: Build the package and run the offline codec gate
         language: system
-        entry: sh -c '! command -v nix || nix build .#checks.x86_64-linux.nixpilot-mcp-selftest --no-link'
+        entry: sh -c '! command -v nix || nix build .#checks.x86_64-linux.nixpilot-selftest --no-link'
         files: \.(nix|py)$
         pass_filenames: false
 

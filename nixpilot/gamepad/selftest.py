@@ -1,5 +1,5 @@
 """Offline codec gate for `nix flake check`: pure report encode/decode
-vectors, no device access. Run: python3 -m nixpilot_mcp.selftest"""
+vectors, no device access. Run: python3 -m nixpilot.gamepad.selftest"""
 
 from __future__ import annotations
 

@@ -12,16 +12,23 @@
         f nixpkgs.legacyPackages.${system});
   in {
     packages = forAllSystems (pkgs: rec {
-      nixpilot-mcp = pkgs.callPackage ./package.nix {};
+      # One derivation per profile; each shares the same source tree, package
+      # layout (share/nixpilot), and interpreter env.
+      nixpilot-mcp = pkgs.callPackage ./package.nix {
+        pname = "nixpilot-mcp";
+        module = "nixpilot.gamepad";
+      };
       default = nixpilot-mcp;
     });
 
     # Offline codec gate: runs the pure report codec/vectors without any
-    # device dependency. The protocol smoke gate (scripts/mcp-smoke.sh)
-    # needs the gadget node and therefore runs only on/against the host.
+    # device dependency. The protocol smoke gates (scripts/mcp-smoke.sh,
+    # scripts/screen-smoke.sh) need the device and therefore run only
+    # on/against the host.
     checks = forAllSystems (pkgs: {
-      nixpilot-mcp-selftest =
-        pkgs.callPackage ./checks.nix {nixpilot-mcp = self.packages.${pkgs.system}.nixpilot-mcp;};
+      nixpilot-selftest = pkgs.callPackage ./checks.nix {
+        nixpilot-mcp = self.packages.${pkgs.system}.nixpilot-mcp;
+      };
     });
 
     devShells = forAllSystems (pkgs: {
