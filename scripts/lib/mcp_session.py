@@ -34,23 +34,20 @@ def step(name: str, condition: bool, detail: str = "") -> None:
 
 
 class Session:
-    """One MCP stdio session."""
+    """One MCP stdio session. `env` always lands in the child process's
+    environment; remote (ssh) sessions embed it as an `env K=V...` prefix to
+    the remote command via ssh_session()."""
 
     def __init__(
         self,
         name: str,
         argv: list[str],
         env: dict[str, str] | None = None,
-        env_mode: str = "remote-env",
     ):
-        """`env_mode="remote-env"` inserts `env K=V...` after argv[0] (the ssh
-        launcher form); "subprocess" exports env to the child process."""
         self.name = name
         self.buf = b""
         self.err: list[str] = []
-        if env and env_mode == "remote-env":
-            argv = argv[:1] + ["env", *[f"{k}={v}" for k, v in env.items()]] + argv[1:]
-        popen_env = {**os.environ, **env} if env and env_mode == "subprocess" else None
+        popen_env = {**os.environ, **env} if env else None
         self.proc = subprocess.Popen(
             argv,
             stdin=subprocess.PIPE,
@@ -157,7 +154,11 @@ class Session:
 def ssh_session(
     name: str, host: str, node_cmd: str, env: dict[str, str] | None = None
 ) -> Session:
-    """A session over the deployed SSH launch path."""
+    """A session over the deployed SSH launch path; env is embedded as an
+    `env K=V...` prefix to the remote command."""
+    remote_cmd = (
+        ["env", *[f"{k}={v}" for k, v in env.items()]] if env else []
+    ) + shlex.split(node_cmd)
     return Session(
         name,
         [
@@ -167,10 +168,8 @@ def ssh_session(
             "-o",
             "BatchMode=yes",
             host,
-            *shlex.split(node_cmd),
+            *remote_cmd,
         ],
-        env=env,
-        env_mode="remote-env",
     )
 
 
@@ -178,4 +177,4 @@ def local_session(
     name: str, argv: list[str], env: dict[str, str] | None = None
 ) -> Session:
     """A session against a local source tree (dev loop)."""
-    return Session(name, argv, env=env, env_mode="subprocess")
+    return Session(name, argv, env=env)
