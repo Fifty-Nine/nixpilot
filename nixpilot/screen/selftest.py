@@ -8,7 +8,14 @@ import base64
 import hashlib
 import sys
 
-from .capture import CaptureError, Frame, StreamState, parse_jpeg_size, validate_jpeg
+from .capture import (
+    CaptureError,
+    Frame,
+    StreamState,
+    parse_jpeg_size,
+    stream_state_from_payload,
+    validate_jpeg,
+)
 
 _CASES = 0
 
@@ -150,6 +157,57 @@ def main() -> None:
         and meta["source_online"] is True
         and meta["captured_fps"] == 48.0,
     )
+
+    # /state advisory degradation: wrapper stripping, missing nested keys,
+    # wrong types, and non-dict bodies all degrade to an all-None state.
+    full = stream_state_from_payload(
+        {
+            "result": {
+                "source": {
+                    "online": True,
+                    "captured_fps": 48,
+                    "resolution": {"width": 32, "height": 18},
+                },
+                "encoder": {"type": "M2M-IMAGE"},
+                "clients_stat": ["ignored"],
+                "stream": {"clients": 3},
+            }
+        }
+    )
+    check(
+        "state full",
+        full
+        == StreamState(
+            online=True,
+            width=32,
+            height=18,
+            captured_fps=48.0,
+            encoder="M2M-IMAGE",
+            clients=3,
+        ),
+    )
+    check(
+        "state missing resolution",
+        stream_state_from_payload({"source": {"online": True}})
+        == StreamState(online=True),
+    )
+    check(
+        "state wrapper stripped",
+        stream_state_from_payload({"result": {"source": {"online": False}}}).online
+        is False,
+    )
+    check(
+        "state wrong types",
+        stream_state_from_payload(
+            {
+                "source": {"online": "yes", "resolution": {"width": "1920"}},
+                "stream": {"clients": {}},
+            }
+        )
+        == StreamState(),
+    )
+    check("state non-dict", stream_state_from_payload("busy") == StreamState())
+    check("state null body", stream_state_from_payload(None) == StreamState())
 
     print(f"nixpilot screen selftest: PASS ({_CASES} cases)")
 

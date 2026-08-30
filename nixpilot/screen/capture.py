@@ -142,6 +142,12 @@ def fetch_stream_state(base_url: str, timeout_s: float) -> StreamState:
     except (CaptureError, ValueError) as exc:
         log.warning("/state unavailable, continuing without advisories: %s", exc)
         return StreamState()
+    return stream_state_from_payload(payload)
+
+
+def stream_state_from_payload(payload: object) -> StreamState:
+    """Advisory extraction from a /state JSON body; any unexpected shape
+    degrades to an all-None StreamState (pure, offline-testable)."""
     if isinstance(payload, dict) and isinstance(payload.get("result"), dict):
         payload = payload["result"]
     try:
