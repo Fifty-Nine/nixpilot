@@ -69,12 +69,23 @@ def build_server(gadget: Gadget) -> FastMCP:
         return data
 
     @mcp.tool(annotations=_WRITE)
-    def set_state(update: report.StateUpdate) -> dict:
+    def set_state(
+        buttons: list[report.Button] | None = None,
+        left: report.Stick | None = None,
+        right: report.Stick | None = None,
+        hat: report.HatName | None = None,
+    ) -> dict:
         """Assert the gamepad state (partial merge: fields you provide replace
         current values, absent fields keep theirs). Writes exactly one HID
         report; state is sticky until the next write or watchdog expiry."""
 
-        return _run(lambda: {"state": gadget.set_state(update).as_dict()})
+        return _run(
+            lambda: {
+                "state": gadget.set_state(
+                    report.StateUpdate(buttons=buttons, left=left, right=right, hat=hat)
+                ).as_dict()
+            }
+        )
 
     @mcp.tool(annotations=_WRITE)
     def press(buttons: list[report.Button], hold_ms: int = 200) -> dict:
