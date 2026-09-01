@@ -31,7 +31,11 @@ REPORT_LEN = 8
 AXIS_CENTER = 0x7F
 HAT_NEUTRAL = 0x0F
 
-#: Button order is the descriptor's bit order (buttons 1-16).
+#: Button order is the descriptor's bit order: HID button usages 1..16,
+#: which Linux hid-input maps to BTN_GAMEPAD + (usage-1) = 0x130..0x13f.
+#: Only the codes the host input stack renders are exposed as API buttons;
+#: the legacy DirectInput slots BTN_C (bit 2), BTN_Z (bit 5) and 0x13f
+#: (bit 15) are unrendered by Steam/SDL testers and remain permanently idle.
 BUTTON_NAMES: tuple[str, ...] = (
     "A",
     "B",
@@ -43,13 +47,13 @@ BUTTON_NAMES: tuple[str, ...] = (
     "RT",
     "BACK",
     "START",
+    "GUIDE",
     "L3",
     "R3",
-    "GUIDE",
-    "BTN14",
-    "BTN15",
-    "BTN16",
 )
+
+#: Report bits with no rendered host meaning; never set by the codec.
+RESERVED_BITS: frozenset[int] = frozenset({2, 5, 15})
 
 #: Hat names, clockwise from north, as they appear in tool arguments.
 HAT_NAMES: tuple[str, ...] = ("N", "NE", "E", "SE", "S", "SW", "W", "NW", "NEUTRAL")
@@ -95,9 +99,25 @@ class Button(enum.StrEnum):
     L3 = "L3"
     R3 = "R3"
     GUIDE = "GUIDE"
-    BTN14 = "BTN14"
-    BTN15 = "BTN15"
-    BTN16 = "BTN16"
+
+
+#: Wire bit for each button in the DirectInput descriptor order; gaps are the
+#: unrendered legacy slots (see RESERVED_BITS).
+BUTTON_BITS: dict[str, int] = {
+    "A": 0,
+    "B": 1,
+    "X": 3,
+    "Y": 4,
+    "LB": 6,
+    "RB": 7,
+    "LT": 8,
+    "RT": 9,
+    "BACK": 10,
+    "START": 11,
+    "GUIDE": 12,
+    "L3": 13,
+    "R3": 14,
+}
 
 
 def axis_to_byte(value: float) -> int:
@@ -182,9 +202,9 @@ class GamepadState(BaseModel):
 
     def encode(self) -> bytes:
         raw = bytearray(REPORT_LEN)
-        for pos, name in enumerate(BUTTON_NAMES):
-            if Button(name) in self.buttons:
-                raw[pos // 8] |= 1 << (pos % 8)
+        for name in self.buttons:
+            bit = BUTTON_BITS[name]
+            raw[bit // 8] |= 1 << (bit % 8)
         raw[2] = axis_to_byte(self.left.x)
         raw[3] = axis_to_byte(self.left.y)
         raw[4] = axis_to_byte(self.right.x)
@@ -204,9 +224,14 @@ class GamepadState(BaseModel):
             raise ReportError("byte 6 carries undefined high-nibble bits")
         names = [
             name
-            for pos, name in enumerate(BUTTON_NAMES)
-            if (raw[pos // 8] >> (pos % 8)) & 1
+            for name, bit in BUTTON_BITS.items()
+            if (raw[bit // 8] >> (bit % 8)) & 1
         ]
+        reserved = [bit for bit in RESERVED_BITS if (raw[bit // 8] >> (bit % 8)) & 1]
+        if reserved:
+            raise ReportError(
+                f"unrendered reserved button bits set: {sorted(reserved)}"
+            )
         try:
             hat = _HAT_FROM_WIRE[raw[6] & 0x0F]
         except KeyError as exc:

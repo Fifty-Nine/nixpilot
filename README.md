@@ -107,7 +107,7 @@ deadline).
 
 | Field | Domain | Wire |
 |---|---|---|
-| Buttons | `A B X Y LB RB LT RT BACK START L3 R3 GUIDE BTN14 BTN15 BTN16` | `[0]` bits 0–7 = buttons 1–8, `[1]` bits 0–7 = 9–16 |
+| Buttons | `A B X Y LB RB LT RT BACK START GUIDE L3 R3` | DirectInput bit order: `[0]` bits 0–7 = A B ·(C) X Y ·(Z) LB RB, `[1]` bits 0–7 = LT RT BACK START GUIDE L3 R3 ·(unused). Reserved bits 2, 5 and 15 (`BTN_C`, `BTN_Z`, 0x13f) are never set — the host input stack does not render them. |
 | Sticks | float −1.0..1.0 | byte center `0x7F`; +1.0 → 255; −1.0 → 0 |
 | Hat | `N NE E SE S SW W NW NEUTRAL` | low nibble of `[6]`: 0..7, neutral `0xF` |
 

@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from .report import (
     IDLE_REPORT,
+    RESERVED_BITS,
     Button,
     GamepadState,
     ReportError,
@@ -45,10 +46,24 @@ def main() -> None:
     mixed = GamepadState(
         buttons=frozenset({Button.A, Button.RT, Button.START})
     ).encode()
-    check("button bits", mixed[0] == 0x81 and mixed[1] == 0x02)
+    check("button bits", mixed[0] == 0x01 and mixed[1] == 0x0A)
     check(
-        "all 16 buttons",
-        GamepadState(buttons=frozenset(Button)).encode()[:2] == b"\xff\xff",
+        "all named buttons",
+        GamepadState(buttons=frozenset(Button)).encode()[:2] == bytes((0xDB, 0x7F)),
+    )
+    check(
+        "reserved bits never set by encode",
+        all(
+            not (
+                GamepadState(buttons=frozenset(Button)).encode()[bit // 8] >> (bit % 8)
+            )
+            & 1
+            for bit in RESERVED_BITS
+        ),
+    )
+    expect_error(
+        "reserved bits rejected on decode",
+        lambda: GamepadState.from_report(bytes.fromhex("24007f7f7f7f0f00")),
     )
 
     full_plus = GamepadState(left=Stick(x=1.0, y=1.0)).encode()

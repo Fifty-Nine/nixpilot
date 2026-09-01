@@ -36,9 +36,9 @@ _LAYOUT = {
         "6": "hat switch, low nibble: 0=N..7=NW, 0xF neutral",
         "7": "constant zero padding",
     },
-    "buttons": {name: pos for pos, name in enumerate(report.BUTTON_NAMES)},
+    "buttons": dict(report.BUTTON_BITS),
     "linux_input_codes": {
-        name: 0x130 + pos for pos, name in enumerate(report.BUTTON_NAMES)
+        name: 0x130 + bit for name, bit in report.BUTTON_BITS.items()
     },
     "hat": dict(report.HAT_WIRE),
     "axes": "tool domain -1.0..1.0; byte 0x7F = center; +1.0 -> 255; -1.0 -> 0",
