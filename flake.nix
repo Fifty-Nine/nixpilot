@@ -37,7 +37,7 @@
     checks = forAllSystems (pkgs: {
       nixpilot-selftest = pkgs.callPackage ./checks.nix {
         inherit
-          (self.packages.${pkgs.system})
+          (self.packages.${pkgs.stdenv.hostPlatform.system})
           nixpilot-mcp
           nixpilot-keyboard-mcp
           nixpilot-screen-mcp
