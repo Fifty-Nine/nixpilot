@@ -25,26 +25,29 @@ _READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint
 
 _LAYOUT = {
     "profile": "gamepad",
-    "report_length": 8,
+    "report_length": 10,
     "bytes": {
         "0": "buttons 1-8 (bit i = button i+1)",
         "1": "buttons 9-16",
         "2": "left.x (X)",
         "3": "left.y (Y)",
-        "4": "right.x (Z)",
-        "5": "right.y (Rz)",
-        "6": "hat switch, low nibble: 0=N..7=NW, 0xF neutral",
-        "7": "constant zero padding",
+        "4": "right.x (Rx)",
+        "5": "right.y (Ry)",
+        "6": "left trigger (Z), 0x00..0xFF",
+        "7": "right trigger (Rz), 0x00..0xFF",
+        "8": "hat switch, low nibble: 0=N..7=NW, 0xF neutral",
+        "9": "constant zero padding",
     },
     "buttons": dict(report.BUTTON_BITS),
+    "trigger_axes": dict(report.TRIGGER_AXES),
     "linux_input_codes": {
         name: 0x130 + bit for name, bit in report.BUTTON_BITS.items()
     },
     "hat": dict(report.HAT_WIRE),
-    "axes": "tool domain -1.0..1.0; byte 0x7F = center; +1.0 -> 255; -1.0 -> 0",
+    "axes": "tool domain -1.0..1.0; stick bytes 0x7F = center; +1.0 -> 255; -1.0 -> 0; LT/RT buttons map to trigger bytes 0x00/0xFF",
     "descriptor_base64": (
-        "BQEJBaEBBQkZASkQFQAlAXUBlRCBAgUBCTAJMQkyCTUVACb/AHUIlQSBAgk5FQAlBzUA"
-        "RjsBZQB1BJUBgUJ1BJUBgQN1CJUBgQPA"
+        "BQEJBaEBBQkZASkQFQAlAXUBlRCBAgUBCTAJMQkzCTQJMgk1FQAm/wB1CJUGgQI"
+        "JORUAJQc1AEY7AWUAdQSVAYFCdQSVAYEDdQiVAYEDwA=="
     ),
     "device_docs": "tinypilot workspace: tinypilot-docs/usb-gadget.md, tinypilot-docs/m5-gate.md",
 }
@@ -121,8 +124,8 @@ def build_server(gadget: Gadget) -> FastMCP:
 
     @mcp.tool(annotations=_WRITE)
     def send_raw(hex: str) -> dict:
-        """Write a raw 8-byte HID report (16 hex characters) for protocol
-        parity with the tinypilot workspace's gamepad-smoke vectors. Byte 7
+        """Write a raw 10-byte HID report (20 hex characters) for protocol
+        parity with the tinypilot workspace's gamepad-smoke vectors. Byte 9
         (constant padding) must be 00; the report is decoded back into the
         tracked state."""
 

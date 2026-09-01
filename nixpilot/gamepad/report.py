@@ -1,21 +1,24 @@
 """Gamepad HID report codec for the nixpilot gamepad profile.
 
-Wire contract (8 bytes), device-verified in the tinypilot workspace's
-`tinypilot-docs/m5-gate.md`:
+Wire contract (10 bytes), Xbox-style axis layout so the host input stack
+renders both sticks and both analog triggers:
 
     [0] buttons 1-8   (bit i = button i+1)
     [1] buttons 9-16
-    [2] X   left stick horizontal
+    [2] X   left stick horizontal   (center 0x7F)
     [3] Y   left stick vertical
-    [4] Z   right stick horizontal
-    [5] Rz  right stick vertical
-    [6] hat switch in the low nibble (0=N .. 7=NW, 0xF neutral)
-    [7] constant zero padding
+    [4] Rx  right stick horizontal
+    [5] Ry  right stick vertical
+    [6] Z   left trigger (0x00..0xFF)
+    [7] Rz  right trigger (0x00..0xFF)
+    [8] hat switch in the low nibble (0=N .. 7=NW, 0xF neutral)
+    [9] constant zero padding
 
 Tool-schema axes are normalized floats in -1.0..1.0 (+y = up) with strict
 bounds; the 8-bit report grid is asymmetric around the center byte 0x7F and
 the rounding below keeps both endpoints exact and the center byte-identical
-with the idle report.
+with the idle report. LT/RT are tool-level buttons mapped onto the analog
+trigger axes: asserted -> 0xFF, deasserted -> 0x00.
 """
 
 from __future__ import annotations
@@ -27,8 +30,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-REPORT_LEN = 8
+REPORT_LEN = 10
 AXIS_CENTER = 0x7F
+TRIGGER_MAX = 0xFF
 HAT_NEUTRAL = 0x0F
 
 #: Button order is the descriptor's bit order: HID button usages 1..16,
@@ -75,10 +79,10 @@ HatName = Literal["N", "NE", "E", "SE", "S", "SW", "W", "NW", "NEUTRAL"]
 
 #: The idle report every session and reset returns to.
 IDLE_REPORT = bytes(
-    (0, 0, AXIS_CENTER, AXIS_CENTER, AXIS_CENTER, AXIS_CENTER, HAT_NEUTRAL, 0)
+    (0, 0, AXIS_CENTER, AXIS_CENTER, AXIS_CENTER, AXIS_CENTER, 0, 0, HAT_NEUTRAL, 0)
 )
 
-_RAW_HEX = re.compile(r"[0-9a-fA-F]{16}")
+_RAW_HEX = re.compile(r"[0-9a-fA-F]{20}")
 
 
 class ReportError(ValueError):
@@ -101,8 +105,9 @@ class Button(enum.StrEnum):
     GUIDE = "GUIDE"
 
 
-#: Wire bit for each button in the DirectInput descriptor order; gaps are the
-#: unrendered legacy slots (see RESERVED_BITS).
+#: Wire bit for each digital button in the descriptor order; gaps are the
+#: unrendered legacy slots (see RESERVED_BITS). LT/RT are not button bits:
+#: they drive the analog trigger axes (bytes 6/7).
 BUTTON_BITS: dict[str, int] = {
     "A": 0,
     "B": 1,
@@ -110,14 +115,15 @@ BUTTON_BITS: dict[str, int] = {
     "Y": 4,
     "LB": 6,
     "RB": 7,
-    "LT": 8,
-    "RT": 9,
     "BACK": 10,
     "START": 11,
     "GUIDE": 12,
     "L3": 13,
     "R3": 14,
 }
+
+#: Analog trigger buttons, mapped to the Z/Rz axes.
+TRIGGER_AXES: dict[str, int] = {"LT": 6, "RT": 7}
 
 
 def axis_to_byte(value: float) -> int:
@@ -137,9 +143,9 @@ def byte_to_axis(value: int) -> float:
 
 
 def parse_raw_hex(raw: str) -> bytes:
-    """Validate and decode the send_raw hex literal into 8 report bytes."""
+    """Validate and decode the send_raw hex literal into 10 report bytes."""
     if not isinstance(raw, str) or _RAW_HEX.fullmatch(raw) is None:
-        raise ReportError("raw report must be exactly 16 hex characters")
+        raise ReportError("raw report must be exactly 20 hex characters")
     return bytes.fromhex(raw)
 
 
@@ -203,14 +209,16 @@ class GamepadState(BaseModel):
     def encode(self) -> bytes:
         raw = bytearray(REPORT_LEN)
         for name in self.buttons:
-            bit = BUTTON_BITS[name]
-            raw[bit // 8] |= 1 << (bit % 8)
+            if (bit := BUTTON_BITS.get(name)) is not None:
+                raw[bit // 8] |= 1 << (bit % 8)
+            else:
+                raw[TRIGGER_AXES[name]] = TRIGGER_MAX
         raw[2] = axis_to_byte(self.left.x)
         raw[3] = axis_to_byte(self.left.y)
         raw[4] = axis_to_byte(self.right.x)
         raw[5] = axis_to_byte(self.right.y)
-        raw[6] = HAT_WIRE[self.hat]
-        raw[7] = 0
+        raw[8] = HAT_WIRE[self.hat]
+        raw[9] = 0
         return bytes(raw)
 
     @classmethod
@@ -218,24 +226,25 @@ class GamepadState(BaseModel):
         """Decode a raw report; used to keep state honest after send_raw."""
         if len(raw) != REPORT_LEN:
             raise ReportError(f"report must be {REPORT_LEN} bytes, got {len(raw)}")
-        if raw[7] != 0:
-            raise ReportError("byte 7 (constant padding) must be 00")
-        if raw[6] & 0xF0:
-            raise ReportError("byte 6 carries undefined high-nibble bits")
+        if raw[9] != 0:
+            raise ReportError("byte 9 (constant padding) must be 00")
+        if raw[8] & 0xF0:
+            raise ReportError("byte 8 carries undefined high-nibble bits")
         names = [
             name
             for name, bit in BUTTON_BITS.items()
             if (raw[bit // 8] >> (bit % 8)) & 1
         ]
+        names += [name for name, pos in TRIGGER_AXES.items() if raw[pos] > 0]
         reserved = [bit for bit in RESERVED_BITS if (raw[bit // 8] >> (bit % 8)) & 1]
         if reserved:
             raise ReportError(
                 f"unrendered reserved button bits set: {sorted(reserved)}"
             )
         try:
-            hat = _HAT_FROM_WIRE[raw[6] & 0x0F]
+            hat = _HAT_FROM_WIRE[raw[8] & 0x0F]
         except KeyError as exc:
-            raise ReportError(f"undefined hat nibble {raw[6] & 0x0F:#x}") from exc
+            raise ReportError(f"undefined hat nibble {raw[8] & 0x0F:#x}") from exc
         return cls(
             buttons=frozenset(Button(name) for name in names),
             left=Stick(x=byte_to_axis(raw[2]), y=byte_to_axis(raw[3])),

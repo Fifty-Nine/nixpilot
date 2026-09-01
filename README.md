@@ -12,9 +12,10 @@ all three packages, putting the three binaries in the device's `PATH`.
 
 ## Scope
 
-- **Gamepad profile (in scope):** the M5 device persona — 16 named buttons,
-  two 8-bit analog sticks (left X/Y, right Z/Rz), an 8-way hat switch, 8-byte
-  reports, write-only (no readback — `no_out_endpoint=1`).
+- **Gamepad profile (in scope):** the M5 device persona — 16 named buttons
+  (13 exposed; the rest unrendered legacy codes), left stick X/Y and right
+  stick Rx/Ry, analog triggers Z/Rz, an 8-way hat switch, 10-byte reports,
+  write-only (no readback — `no_out_endpoint=1`).
 - **Keyboard profile (in scope):** the boot-protocol keyboard endpoint
   (6-slot usage array, 8 modifiers, descriptor-legal usages through 0x91,
   tracked set = 109 named keys, max 6 keys/sticky state), US QWERTY
@@ -78,7 +79,7 @@ machine-readable shape. Every write result carries the delivery caveat
 (success means the USB gadget accepted the report — the target's
 interpretation must be verified on-screen).
 
-**`set_state`** — authoritative partial merge; one 8-byte report per call.
+**`set_state`** — authoritative partial merge; one 10-byte report per call.
 
 ```jsonc
 {
@@ -94,7 +95,7 @@ sleep + re-assert previous state. **`sequence`** — ≤ 100 steps of
 `press` / `set_state` / `delay_ms`, ≤ 30 s total, pre-checked, one flock
 acquisition. **`reset`** — idle report. **`status`** — node writability, UDC
 binding, asserted state, watchdog deadline, lock holder. **`send_raw`** —
-`{ hex: <16 hex> }`; byte 7 (const padding) must be `00`; decoded back into
+`{ hex: <20 hex> }`; byte 9 (const padding) must be `00`; decoded back into
 state so tracking stays authoritative (parity with the tinypilot workspace's
 `scripts/gamepad-smoke.sh` vectors).
 
@@ -107,9 +108,10 @@ deadline).
 
 | Field | Domain | Wire |
 |---|---|---|
-| Buttons | `A B X Y LB RB LT RT BACK START GUIDE L3 R3` | DirectInput bit order: `[0]` bits 0–7 = A B ·(C) X Y ·(Z) LB RB, `[1]` bits 0–7 = LT RT BACK START GUIDE L3 R3 ·(unused). Reserved bits 2, 5 and 15 (`BTN_C`, `BTN_Z`, 0x13f) are never set — the host input stack does not render them. |
-| Sticks | float −1.0..1.0 | byte center `0x7F`; +1.0 → 255; −1.0 → 0 |
-| Hat | `N NE E SE S SW W NW NEUTRAL` | low nibble of `[6]`: 0..7, neutral `0xF` |
+| Buttons | `A B X Y LB RB BACK START GUIDE L3 R3` | DirectInput bit order: `[0]` bits 0–7 = A B ·(C) X Y ·(Z) LB RB, `[1]` bits 0–7 = ·(TL2) ·(TR2) BACK START GUIDE L3 R3 ·(unused). Reserved bits 2, 5 and 15 (`BTN_C`, `BTN_Z`, 0x13f) are never set — the host input stack does not render them. |
+| Triggers | `LT` / `RT` buttons | analog axes `[6]` (Z) and `[7]` (Rz): asserted → `0xFF`, deasserted → `0x00` |
+| Sticks | float −1.0..1.0 | bytes `[2..5]` (X Y Rx Ry), center `0x7F`; +1.0 → 255; −1.0 → 0 |
+| Hat | `N NE E SE S SW W NW NEUTRAL` | low nibble of `[8]`: 0..7, neutral `0xF` |
 
 ## Profile: keyboard (`nixpilot-keyboard-mcp`)
 
@@ -208,7 +210,7 @@ Gamepad:
   protocol-only).
 - **Arbitration:** exclusive `flock` on the session lockfile; timed phases
   never interleave with tool calls.
-- **Writes:** one long-lived `open("/dev/hidg3")`, single atomic 8-byte write
+- **Writes:** one long-lived `open("/dev/hidg3")`, single atomic 10-byte write
   per report; a successful write proves the gadget accepted the report —
   nothing about the target's interpretation.
 

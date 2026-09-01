@@ -22,7 +22,7 @@ from lib.mcp_session import Fail, ssh_session, step
 
 TOOLS = ["press", "reset", "send_raw", "sequence", "set_state", "status"]
 RESOURCES = ["gadget://gamepad/layout", "gadget://gamepad/state"]
-A_HEX = "01007f7f7f7f0f00"
+A_HEX = "01007f7f7f7f00000f00"
 
 HOST = os.environ.get("NIXPILOT_SMOKE_HOST", "princet@tinypilot.home.trprince.com")
 NODE_BIN = os.environ.get("NIXPILOT_SMOKE_NODE", "nixpilot-mcp")
@@ -72,10 +72,10 @@ def main() -> None:
         json.dumps(state),
     )
 
-    state = s.tool_json("send_raw", {"hex": "030000ff7f7f0600"}).get("state", {})
+    state = s.tool_json("send_raw", {"hex": "03007f7f7f7f00ff0600"}).get("state", {})
     step(
         "send_raw combo",
-        set(state.get("buttons", [])) == {"A", "B"} and state.get("hat") == "W",
+        set(state.get("buttons", [])) == {"A", "B", "RT"} and state.get("hat") == "W",
         json.dumps(state),
     )
 
@@ -109,7 +109,7 @@ def main() -> None:
         ),
         (
             "reject nonzero padding",
-            {"name": "send_raw", "arguments": {"hex": "01007f7f7f7f0f01"}},
+            {"name": "send_raw", "arguments": {"hex": "01007f7f7f7f00000f01"}},
         ),
         (
             "reject empty press",
