@@ -1,5 +1,7 @@
-# nixpilot: MCP servers for the NixOS TinyPilot KVM, served by the host.
+# nixpilot: Reusable NixOS modules and MCP servers for TinyPilot KVM appliances.
 {
+  description = "Reusable NixOS modules and MCP servers for TinyPilot KVM appliances";
+
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs = {
@@ -15,13 +17,12 @@
       backend = ./nixosModules/backend.nix;
       ustreamer = ./nixosModules/ustreamer.nix;
       usb-gadget = ./nixosModules/usb-gadget.nix;
-      edid = ./nixosModules/edid.nix;
       default = ./nixosModules/default.nix;
     };
 
     packages = forAllSystems (pkgs: rec {
-      # One derivation per profile; each shares the same source tree, package
-      # layout (share/nixpilot), and interpreter env.
+      tinypilot-backend = pkgs.callPackage ./pkgs/tinypilot-backend.nix {};
+
       nixpilot-mcp = pkgs.callPackage ./package.nix {
         pname = "nixpilot-mcp";
         module = "nixpilot.gamepad";
@@ -37,11 +38,6 @@
       default = nixpilot-mcp;
     });
 
-    # Offline selftest gate: pure source checks (report codecs and JPEG
-    # marker walk) without any device dependency. The protocol smoke gates
-    # (scripts/mcp-smoke.sh, scripts/keyboard-smoke.sh,
-    # scripts/screen-smoke.sh) need the device and therefore run only
-    # on/against the host.
     checks = forAllSystems (pkgs: {
       nixpilot-selftest = pkgs.callPackage ./checks.nix {
         inherit
