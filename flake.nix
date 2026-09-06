@@ -11,6 +11,14 @@
       nixpkgs.lib.genAttrs systems (system:
         f nixpkgs.legacyPackages.${system});
   in {
+    nixosModules = {
+      backend = ./nixosModules/backend.nix;
+      ustreamer = ./nixosModules/ustreamer.nix;
+      usb-gadget = ./nixosModules/usb-gadget.nix;
+      edid = ./nixosModules/edid.nix;
+      default = ./nixosModules/default.nix;
+    };
+
     packages = forAllSystems (pkgs: rec {
       # One derivation per profile; each shares the same source tree, package
       # layout (share/nixpilot), and interpreter env.
