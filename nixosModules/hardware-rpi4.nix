@@ -64,7 +64,10 @@
   boot = {
     kernelParams = ["cma=128M"];
     supportedFilesystems.zfs = lib.mkForce false;
-    initrd.availableKernelModules = [
+    # mkForce: sd-image-aarch64 sets a broad all-platform module list
+    # (dw-hdmi, rockchipdrm, sun4i-drm, ...) with modules the RPi kernel does
+    # not build; drop them in favour of the RPi 4 essentials.
+    initrd.availableKernelModules = lib.mkForce [
       "pcie-brcmstb"
       "reset-raspberrypi"
       "usb-storage"
