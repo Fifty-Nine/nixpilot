@@ -1,9 +1,0 @@
-[all]
-dtoverlay=dwc2,dr_mode=peripheral
-dtoverlay=tc358743
-dtoverlay=tc358743-audio
-dtoverlay=gpio-fan,gpiopin=2,temp=60000,hyst=10000
-dtoverlay=vc4-kms-v3d
-dtparam=i2c_arm=on
-dtparam=i2c_vc=on
-dtparam=spi=on
