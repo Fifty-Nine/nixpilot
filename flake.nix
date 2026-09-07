@@ -18,6 +18,7 @@
       ustreamer = ./nixosModules/ustreamer.nix;
       usb-gadget = ./nixosModules/usb-gadget.nix;
       mcp = ./nixosModules/mcp.nix;
+      caddy = ./nixosModules/caddy.nix;
       default = ./nixosModules/default.nix;
     };
 
