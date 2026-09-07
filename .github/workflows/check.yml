@@ -1,0 +1,22 @@
+name: CI Checks
+
+on:
+  push:
+    branches: ["main", "feat/*", "feat-*"]
+  pull_request:
+    branches: ["main", "feat/*", "feat-*"]
+
+jobs:
+  check:
+    name: Nix Flake Checks
+    runs-on: [self-hosted, Linux, ARM64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Determinate Nix
+        uses: DeterminateSystems/determinate-nix-action@v3
+        continue-on-error: true
+
+      - name: Run Flake Checks
+        run: nix flake check --all-systems
