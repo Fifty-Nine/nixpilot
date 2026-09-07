@@ -63,16 +63,91 @@
       ];
     };
 
-    checks = forAllSystems (pkgs: {
-      nixpilot-selftest = pkgs.callPackage ./checks.nix {
-        inherit
-          (self.packages.${pkgs.stdenv.hostPlatform.system})
-          nixpilot-mcp
-          nixpilot-keyboard-mcp
-          nixpilot-screen-mcp
-          ;
-      };
-    });
+    checks = forAllSystems (pkgs: let
+      system = pkgs.stdenv.hostPlatform.system;
+
+      evalCheck = name: config:
+        pkgs.runCommand name {} ''
+          # ${builtins.unsafeDiscardStringContext
+            (nixpkgs.lib.nixosSystem {
+              inherit system;
+              modules = [
+                ./nixosModules/backend.nix
+                ./nixosModules/ustreamer.nix
+                ./nixosModules/usb-gadget.nix
+                ./nixosModules/mcp.nix
+                ./nixosModules/caddy.nix
+                {
+                  boot.loader.grub.enable = false;
+                  fileSystems."/" = {
+                    device = "/dev/sda1";
+                    fsType = "ext4";
+                  };
+                  system.stateVersion = "24.11";
+                  nixpkgs.hostPlatform = system;
+                }
+                config
+              ];
+            }).config.system.build.toplevel.drvPath}
+          touch $out
+        '';
+    in
+      {
+        nixpilot-selftest = pkgs.callPackage ./checks.nix {
+          inherit
+            (self.packages.${system})
+            nixpilot-mcp
+            nixpilot-keyboard-mcp
+            nixpilot-screen-mcp
+            ;
+        };
+
+        eval-minimal = evalCheck "eval-minimal" {
+          services.nixpilot = {
+            usb-gadget.enableKeyboard = true;
+            usb-gadget.enableMouse = true;
+            ustreamer.enable = true;
+            backend.enable = true;
+          };
+        };
+
+        eval-mcp-no-gamepad = evalCheck "eval-mcp-no-gamepad" {
+          services.nixpilot = {
+            usb-gadget.enableKeyboard = true;
+            usb-gadget.enableMouse = true;
+            ustreamer.enable = true;
+            backend.enable = true;
+            mcp.enable = true;
+          };
+        };
+
+        eval-full = evalCheck "eval-full" {
+          services.nixpilot = {
+            usb-gadget.enableKeyboard = true;
+            usb-gadget.enableMouse = true;
+            usb-gadget.enableGamepad = true;
+            ustreamer.enable = true;
+            backend.enable = true;
+            mcp.enable = true;
+            caddy.enable = true;
+          };
+        };
+
+        eval-custom = evalCheck "eval-custom" {
+          services.nixpilot = {
+            usb-gadget.enableKeyboard = true;
+            usb-gadget.enableMouse = false;
+            usb-gadget.enableGamepad = true;
+            mcp.enable = true;
+          };
+        };
+      }
+      // (nixpkgs.lib.optionalAttrs (system == "aarch64-linux") {
+        eval-sd-image = pkgs.runCommand "eval-sd-image" {} ''
+          # ${builtins.unsafeDiscardStringContext self.nixosConfigurations.sdImage.config.system.build.sdImage.drvPath}
+          touch $out
+        '';
+      }));
 
     devShells = forAllSystems (pkgs: {
       default = let

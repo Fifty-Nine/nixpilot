@@ -1,0 +1,32 @@
+name: Checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  check-ubuntu:
+    name: "flake check (ubuntu-latest)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Nix
+        uses: DeterminateSystems/determinate-nix-action@v3
+        with:
+          diagnostic-endpoint: ""
+      - name: Check Flake
+        run: nix flake check -L
+
+  check-arm64:
+    name: "flake check (ARM64)"
+    runs-on: [self-hosted, Linux, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Nix
+        uses: DeterminateSystems/determinate-nix-action@v3
+        with:
+          diagnostic-endpoint: ""
+      - name: Check Flake
+        run: nix flake check -L
