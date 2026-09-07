@@ -76,9 +76,30 @@
     kernelPackages = pkgs.linuxPackagesFor (pkgs.callPackage (inputs.nixos-hardware + "/raspberry-pi/common/kernel.nix") {
       rpiVersion = 4;
       argsOverride = {
+        # argsOverride replaces kernel.nix's structuredExtraConfig wholesale, so
+        # entries from the rpiVersion = 4 branch of kernel.nix are replicated
+        # here (host-tuning entries included: NFS root, IP autoconfig, single
+        # CPU for the 2 GB board, small CMA, preempt-none). Re-sync these
+        # whenever the nixos-hardware input is updated.
         structuredExtraConfig = with lib.kernel; {
-          DEBUG_INFO = lib.mkForce no;
-          DEBUG_INFO_BTF = lib.mkForce no;
+          NR_CPUS = lib.mkForce (freeform "4");
+          CMA_SIZE_MBYTES = lib.mkForce (freeform "5");
+          NFS_FS = lib.mkForce yes;
+          NFS_V4 = yes;
+          ROOT_NFS = yes;
+          IP_PNP = lib.mkForce yes;
+          IP_PNP_DHCP = yes;
+          IP_PNP_RARP = yes;
+          NET_CLS_BPF = lib.mkForce yes;
+          NLS_CODEPAGE_437 = lib.mkForce yes;
+          FB_SIMPLE = yes;
+          PREEMPT = lib.mkForce yes;
+          PREEMPT_LAZY = lib.mkForce no;
+          PREEMPT_VOLUNTARY = lib.mkForce no;
+          DEBUG_INFO = lib.mkForce (option no);
+          DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT = lib.mkForce (option no);
+          DEBUG_INFO_BTF = lib.mkForce (option no);
+          GDB_SCRIPTS = lib.mkForce (option no);
         };
       };
     });
