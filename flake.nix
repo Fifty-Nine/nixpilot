@@ -20,10 +20,10 @@
       nixpkgs.lib.genAttrs systems (system:
         f nixpkgs.legacyPackages.${system});
 
-    mkEvalCheck = system: name: moduleConfig: let
-      pkgs = nixpkgs.legacyPackages.${system};
+    mkEvalCheck = checkSys: targetSys: name: moduleConfig: let
+      pkgs = nixpkgs.legacyPackages.${checkSys};
       eval = nixpkgs.lib.nixosSystem {
-        inherit system;
+        system = targetSys;
         modules = [
           self.nixosModules.default
           {
@@ -40,7 +40,9 @@
       };
       evalProof = builtins.unsafeDiscardStringContext eval.config.system.build.toplevel.drvPath;
     in
-      pkgs.writeText "eval-check-${name}-${system}" evalProof;
+      pkgs.runCommand "eval-check-${name}-${targetSys}" {} ''
+        echo "${evalProof}" > $out
+      '';
   in {
     nixosModules = {
       backend = ./nixosModules/backend.nix;
@@ -80,6 +82,7 @@
         nixos-hardware.nixosModules.raspberry-pi-4
         self.nixosModules.default
         {
+          system.stateVersion = "26.11";
           system.activationScripts.bootFirmware = ''
             mkdir -p /boot/firmware
           '';
@@ -91,86 +94,86 @@
 
     checks = forAllSystems (pkgs: let
       sys = pkgs.stdenv.hostPlatform.system;
-    in
-      {
-        nixpilot-selftest = pkgs.callPackage ./checks.nix {
-          inherit
-            (self.packages.${sys})
-            nixpilot-mcp
-            nixpilot-keyboard-mcp
-            nixpilot-screen-mcp
-            ;
-        };
+    in {
+      nixpilot-selftest = pkgs.callPackage ./checks.nix {
+        inherit
+          (self.packages.${sys})
+          nixpilot-mcp
+          nixpilot-keyboard-mcp
+          nixpilot-screen-mcp
+          ;
+      };
 
-        eval-minimal = mkEvalCheck sys "minimal" {
-          services.nixpilot = {
-            backend.enable = true;
-            ustreamer.enable = true;
-            usb-gadget = {
-              enable = true;
-              enableKeyboard = true;
-              enableMouse = true;
-              enableGamepad = false;
-            };
-            mcp.enable = false;
-            caddy.enable = false;
+      eval-minimal = mkEvalCheck sys "aarch64-linux" "minimal" {
+        services.nixpilot = {
+          backend.enable = true;
+          ustreamer.enable = true;
+          usb-gadget = {
+            enable = true;
+            enableKeyboard = true;
+            enableMouse = true;
+            enableGamepad = false;
           };
+          mcp.enable = false;
+          caddy.enable = false;
         };
+      };
 
-        eval-mcp-no-gamepad = mkEvalCheck sys "mcp-no-gamepad" {
-          services.nixpilot = {
-            backend.enable = true;
-            ustreamer.enable = true;
-            usb-gadget = {
-              enable = true;
-              enableKeyboard = true;
-              enableMouse = true;
-              enableGamepad = false;
-            };
-            mcp.enable = true;
-            caddy.enable = false;
+      eval-mcp-no-gamepad = mkEvalCheck sys "aarch64-linux" "mcp-no-gamepad" {
+        services.nixpilot = {
+          backend.enable = true;
+          ustreamer.enable = true;
+          usb-gadget = {
+            enable = true;
+            enableKeyboard = true;
+            enableMouse = true;
+            enableGamepad = false;
           };
+          mcp.enable = true;
+          caddy.enable = false;
         };
+      };
 
-        eval-full = mkEvalCheck sys "full" {
-          services.nixpilot = {
-            backend.enable = true;
-            ustreamer.enable = true;
-            usb-gadget = {
-              enable = true;
-              enableKeyboard = true;
-              enableMouse = true;
-              enableGamepad = true;
-            };
-            mcp.enable = true;
-            caddy.enable = true;
+      eval-full = mkEvalCheck sys "aarch64-linux" "full" {
+        services.nixpilot = {
+          backend.enable = true;
+          ustreamer.enable = true;
+          usb-gadget = {
+            enable = true;
+            enableKeyboard = true;
+            enableMouse = true;
+            enableGamepad = true;
           };
+          mcp.enable = true;
+          caddy.enable = true;
         };
+      };
 
-        eval-custom = mkEvalCheck sys "custom" {
-          services.nixpilot = {
-            backend.enable = true;
-            ustreamer.enable = true;
-            usb-gadget = {
-              enable = true;
-              enableKeyboard = true;
-              enableMouse = false;
-              enableGamepad = true;
-            };
-            mcp = {
-              enable = true;
-              screen.enable = true;
-            };
-            caddy.enable = false;
+      eval-custom = mkEvalCheck sys "aarch64-linux" "custom" {
+        services.nixpilot = {
+          backend.enable = true;
+          ustreamer.enable = true;
+          usb-gadget = {
+            enable = true;
+            enableKeyboard = true;
+            enableMouse = false;
+            enableGamepad = true;
           };
+          mcp = {
+            enable = true;
+            screen.enable = true;
+          };
+          caddy.enable = false;
         };
-      }
-      // (nixpkgs.lib.optionalAttrs (sys == "aarch64-linux") {
-        eval-sd-image = let
-          evalProof = builtins.unsafeDiscardStringContext self.nixosConfigurations.sdImage.config.system.build.sdImage.drvPath;
-        in
-          pkgs.writeText "eval-check-sd-image-${sys}" evalProof;
-      }));
+      };
+
+      eval-sd-image = let
+        evalProof = builtins.unsafeDiscardStringContext self.nixosConfigurations.sdImage.config.system.build.sdImage.drvPath;
+      in
+        pkgs.runCommand "eval-check-sd-image-aarch64-linux" {} ''
+          echo "${evalProof}" > $out
+        '';
+    });
 
     devShells = forAllSystems (pkgs: {
       default = let
