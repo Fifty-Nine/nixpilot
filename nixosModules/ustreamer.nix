@@ -98,7 +98,7 @@ in {
               --workers=3 \
               --persistent \
               --drop-same-frames=30 \
-              --buffers=3
+              --buffers=3 \
               ${lib.optionalString cfg.dvTimings "--dv-timings"}
           '';
           Restart = "always";
