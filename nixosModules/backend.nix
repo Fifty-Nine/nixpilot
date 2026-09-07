@@ -52,6 +52,10 @@ in {
       environment = {
         PORT = toString cfg.port;
         HOST = "127.0.0.1";
+        # The backend reads runtime state (sqlite settings DB, users DB,
+        # flask secret key, settings.yml) from its home dir, which the
+        # vendor located at /home/tinypilot.
+        TINYPILOT_HOME_DIR = "/var/lib/tinypilot";
         CONFIGURATION_FILE = "/var/lib/tinypilot/settings.yml";
       };
       serviceConfig = {
