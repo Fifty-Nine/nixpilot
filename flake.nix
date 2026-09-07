@@ -3,10 +3,13 @@
   description = "Reusable NixOS modules and MCP servers for TinyPilot KVM appliances";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.nixos-hardware.url = "github:NixOS/nixos-hardware";
+  inputs.nixos-hardware.inputs.nixpkgs.follows = "nixpkgs";
 
   outputs = {
     self,
     nixpkgs,
+    nixos-hardware,
   }: let
     systems = ["x86_64-linux" "aarch64-linux"];
     forAllSystems = f:
@@ -22,23 +25,43 @@
       default = ./nixosModules/default.nix;
     };
 
-    packages = forAllSystems (pkgs: rec {
-      tinypilot-backend = pkgs.callPackage ./pkgs/tinypilot-backend.nix {};
+    packages = forAllSystems (pkgs:
+      rec {
+        tinypilot-backend = pkgs.callPackage ./pkgs/tinypilot-backend.nix {};
 
-      nixpilot-mcp = pkgs.callPackage ./package.nix {
-        pname = "nixpilot-mcp";
-        module = "nixpilot.gamepad";
-      };
-      nixpilot-screen-mcp = pkgs.callPackage ./package.nix {
-        pname = "nixpilot-screen-mcp";
-        module = "nixpilot.screen";
-      };
-      nixpilot-keyboard-mcp = pkgs.callPackage ./package.nix {
-        pname = "nixpilot-keyboard-mcp";
-        module = "nixpilot.keyboard";
-      };
-      default = nixpilot-mcp;
-    });
+        nixpilot-mcp = pkgs.callPackage ./package.nix {
+          pname = "nixpilot-mcp";
+          module = "nixpilot.gamepad";
+        };
+        nixpilot-screen-mcp = pkgs.callPackage ./package.nix {
+          pname = "nixpilot-screen-mcp";
+          module = "nixpilot.screen";
+        };
+        nixpilot-keyboard-mcp = pkgs.callPackage ./package.nix {
+          pname = "nixpilot-keyboard-mcp";
+          module = "nixpilot.keyboard";
+        };
+        default = nixpilot-mcp;
+      }
+      // (nixpkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "aarch64-linux") {
+        sdImage = self.nixosConfigurations.sdImage.config.system.build.sdImage;
+      }));
+
+    nixosConfigurations.sdImage = nixpkgs.lib.nixosSystem {
+      system = "aarch64-linux";
+      modules = [
+        "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
+        nixos-hardware.nixosModules.raspberry-pi-4
+        self.nixosModules.default
+        {
+          system.activationScripts.bootFirmware = ''
+            mkdir -p /boot/firmware
+          '';
+          sdImage.firmwareSize = 512;
+          boot.kernelParams = ["cma=128M"];
+        }
+      ];
+    };
 
     checks = forAllSystems (pkgs: {
       nixpilot-selftest = pkgs.callPackage ./checks.nix {
