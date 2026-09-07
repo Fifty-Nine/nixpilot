@@ -9,6 +9,7 @@
   keyboardReport = "BQEJBqEBBQgZASkDFQAlAXUBlQORAglLlQGRApUEkQEFBxngKeeVCIECdQiVAYEBGQApkSb/AJUGgQDA";
   absoluteMouseReport = "BQEJAqEBBQkZASkIFQAlAZUIdQGBAgUBCTAJMRYAACb/f3UQlQKBAgk4FYElf3UIlQGBBgUMCjgCFYElf3UIlQGBBsA=";
   relativeMouseReport = "BQEJAqEBCQGhAAUJGQEpCBUAJQGVCHUBgQIFAQkwCTEWAYAm/391EJUCgQYJOBWBJX91CJUBgQYFDAo4AhWBJX91CJUBgQbAwA==";
+  gamepadReport = "BQEJBaEBBQkZASkQFQAlAXUBlRCBAgUBCTAJMQkzCTQJMgk1FQAm/wB1CJUGgQIJORUAJQc1AEY7AWUAdQSVAYFCdQSVAYEDdQiVAYEDwA==";
 
   gadgetDir = "/sys/kernel/config/usb_gadget/g1";
 
@@ -84,6 +85,14 @@
       echo ${relativeMouseReport} | base64 -d > functions/hid.mouse_relative/report_desc
     ''}
 
+    ${lib.optionalString cfg.enableGamepad ''
+      mkdir -p functions/hid.gamepad
+      echo 0 > functions/hid.gamepad/protocol
+      echo 0 > functions/hid.gamepad/subclass
+      echo 10 > functions/hid.gamepad/report_length
+      echo ${gamepadReport} | base64 -d > functions/hid.gamepad/report_desc
+    ''}
+
     mkdir -p configs/c.1
     echo 250 > configs/c.1/MaxPower
     mkdir -p configs/c.1/strings/0x409
@@ -95,6 +104,9 @@
     ${lib.optionalString cfg.enableMouse ''
       ln -s functions/hid.mouse_absolute configs/c.1/
       ln -s functions/hid.mouse_relative configs/c.1/
+    ''}
+    ${lib.optionalString cfg.enableGamepad ''
+      ln -s functions/hid.gamepad configs/c.1/
     ''}
 
     udevadm settle -t 5 || true
@@ -114,6 +126,12 @@ in {
       type = lib.types.bool;
       default = true;
       description = "Present absolute (/dev/hidg1) and relative (/dev/hidg2) mouse interfaces.";
+    };
+
+    enableGamepad = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Present standard gamepad interface (/dev/hidg3).";
     };
   };
 
