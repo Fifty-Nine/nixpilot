@@ -33,6 +33,12 @@ in {
       description = "Video capture device node.";
     };
 
+    dvTimings = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Query the source's DV timings for the capture resolution instead of the device default. Required for the TC358743 bridge, which reports a fixed 1080p timing and delivers no frames at the 640x480 default.";
+    };
+
     edid.file = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
       default = ./edid-pi4.hex;
@@ -93,12 +99,18 @@ in {
               --persistent \
               --drop-same-frames=30 \
               --buffers=3
+              ${lib.optionalString cfg.dvTimings "--dv-timings"}
           '';
           Restart = "always";
           RestartSec = 2;
+          CapabilityBoundingSet = "";
+          NoNewPrivileges = true;
           ProtectSystem = "strict";
           ProtectHome = true;
           PrivateTmp = true;
+          ProtectKernelModules = true;
+          ProtectKernelTunables = true;
+          ProtectControlGroups = true;
           SupplementaryGroups = ["video"];
         };
       };

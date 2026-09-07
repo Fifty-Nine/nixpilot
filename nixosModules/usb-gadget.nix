@@ -81,8 +81,12 @@
       mkdir -p functions/hid.mouse_relative
       echo 0 > functions/hid.mouse_relative/protocol
       echo 0 > functions/hid.mouse_relative/subclass
-      echo 4 > functions/hid.mouse_relative/report_length
+      # 7-byte max report size, verbatim from the vendor script.
+      echo 7 > functions/hid.mouse_relative/report_length
       echo ${relativeMouseReport} | base64 -d > functions/hid.mouse_relative/report_desc
+      if [ -e functions/hid.mouse_relative/no_out_endpoint ]; then
+        echo 1 > functions/hid.mouse_relative/no_out_endpoint
+      fi
     ''}
 
     ${lib.optionalString cfg.enableGamepad ''
@@ -91,6 +95,10 @@
       echo 0 > functions/hid.gamepad/subclass
       echo 10 > functions/hid.gamepad/report_length
       echo ${gamepadReport} | base64 -d > functions/hid.gamepad/report_desc
+      # IN-only: no host output reports (no rumble/LED feedback).
+      if [ -e functions/hid.gamepad/no_out_endpoint ]; then
+        echo 1 > functions/hid.gamepad/no_out_endpoint
+      fi
     ''}
 
     mkdir -p configs/c.1
