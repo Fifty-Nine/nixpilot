@@ -1,17 +1,67 @@
 # nixpilot
 
-MCP servers for the NixOS-converted TinyPilot KVM ("nixpilot"), **served by
-the tinypilot host**. Three profiles ship today: the M5 USB-OTG **gamepad**
-(input, `nixpilot-mcp`), the **keyboard** (input, `nixpilot-keyboard-mcp`),
-and read-only **screen** observation (`nixpilot-screen-mcp`). Profile
-device facts: `../tinypilot-docs/usb-gadget.md` + `m5-gate.md` (gadget),
-`video-pipeline.md` + `m3-gate.md` (capture).
+Reusable NixOS flake for TinyPilot KVM appliances with optional MCP servers.
 
-The tinypilot host config imports this repo as a flake input and installs
-all three packages, putting the three binaries in the device's `PATH`.
+## Architecture & Features Overview
+
+The `nixpilot` flake provides a modular, declarative NixOS configuration for building a TinyPilot KVM appliance. The architecture is composed of a unified default module and several sub-modules that can be consumed or overridden:
+
+- **`services.nixpilot.backend`**: Core TinyPilot backend service and dependencies.
+- **`services.nixpilot.ustreamer`**: Video capture pipeline via uStreamer.
+- **`services.nixpilot.usb-gadget`**: Composite USB gadget configuration (keyboard, mouse, gamepad).
+- **`services.nixpilot.mcp`**: Model Context Protocol (MCP) servers (gamepad, keyboard, screen observation).
+- **`services.nixpilot.caddy`**: Reverse proxy configuration utilizing Caddy for unbuffered streaming and web access.
+
+## Usage Instructions
+
+### Building a bootable SD image (Raspberry Pi 4)
+
+You can build a bootable SD card image for a Raspberry Pi 4 directly from this flake:
+
+```bash
+nix build .#sdImage
+```
+
+### Importing the Flake in a downstream NixOS system
+
+You can consume the modules in your own NixOS configuration. First, add the flake to your `flake.nix` inputs:
+
+```nix
+{
+  inputs.nixpilot.url = "https://flakehub.com/f/Fifty-Nine/nixpilot/*";
+  # ...
+}
+```
+
+Then, import the default module in your system configuration:
+
+```nix
+{
+  imports = [
+    inputs.nixpilot.nixosModules.default
+  ];
+
+  services.nixpilot = {
+    enable = true;
+    # Customize sub-modules as needed
+  };
+}
+```
+
+## Testing & Development
+
+Code formatting, linting, and Nix evaluation are validated using `nix flake check`. To verify your changes before submitting:
+
+```bash
+make fmt
+nix flake check
+```
+
+## MCP Servers
+
+MCP servers for the NixOS-converted TinyPilot KVM, **served by the host**. Three profiles ship today: the M5 USB-OTG **gamepad** (input, `nixpilot-mcp`), the **keyboard** (input, `nixpilot-keyboard-mcp`), and read-only **screen** observation (`nixpilot-screen-mcp`). Profile device facts: `../tinypilot-docs/usb-gadget.md` + `m5-gate.md` (gadget), `video-pipeline.md` + `m3-gate.md` (capture).
 
 ## Scope
-
 - **Gamepad profile (in scope):** the M5 device persona — 16 named buttons
   (13 exposed; the rest unrendered legacy codes), left stick X/Y and right
   stick Rx/Ry, analog triggers Z/Rz, an 8-way hat switch, 10-byte reports,
