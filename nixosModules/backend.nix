@@ -25,6 +25,18 @@ in {
   config = lib.mkIf cfg.enable {
     systemd.tmpfiles.rules = ["d /run/sudo 0711 root root -"];
 
+    security.sudo.extraRules = [
+      {
+        users = ["tinypilot"];
+        commands = [
+          {
+            command = "${pkgs.systemd}/bin/shutdown";
+            options = ["NOPASSWD"];
+          }
+        ];
+      }
+    ];
+
     users.users.tinypilot = {
       isSystemUser = true;
       group = "tinypilot";
