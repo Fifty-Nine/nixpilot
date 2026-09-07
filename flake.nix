@@ -14,7 +14,7 @@
     self,
     nixpkgs,
     nixos-hardware,
-  }: let
+  }@inputs: let
     systems = ["x86_64-linux" "aarch64-linux"];
     forAllSystems = f:
       nixpkgs.lib.genAttrs systems (system:
@@ -24,6 +24,7 @@
       pkgs = nixpkgs.legacyPackages.${checkSys};
       eval = nixpkgs.lib.nixosSystem {
         system = targetSys;
+        specialArgs = {inherit inputs;};
         modules = [
           self.nixosModules.default
           {
@@ -45,6 +46,7 @@
       '';
   in {
     nixosModules = {
+      hardware-rpi4 = ./nixosModules/hardware-rpi4.nix;
       backend = ./nixosModules/backend.nix;
       ustreamer = ./nixosModules/ustreamer.nix;
       usb-gadget = ./nixosModules/usb-gadget.nix;
@@ -77,17 +79,14 @@
 
     nixosConfigurations.sdImage = nixpkgs.lib.nixosSystem {
       system = "aarch64-linux";
+      specialArgs = {inherit inputs;};
       modules = [
         "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
         nixos-hardware.nixosModules.raspberry-pi-4
         self.nixosModules.default
+        self.nixosModules.hardware-rpi4
         {
           system.stateVersion = "26.11";
-          system.activationScripts.bootFirmware = ''
-            mkdir -p /boot/firmware
-          '';
-          sdImage.firmwareSize = 512;
-          boot.kernelParams = ["cma=128M"];
         }
       ];
     };
